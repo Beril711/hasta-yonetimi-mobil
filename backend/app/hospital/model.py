@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy import String, Float
-from app.core.base_model import BaseModel
+from app.base.base_model import BaseModel
 
 class Hospital(BaseModel):
     __tablename__ = "hospitals"

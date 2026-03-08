@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy import String, Boolean
-from app.core.base_model import BaseModel
+from app.base.base_model import BaseModel
 
 class User(BaseModel):
     __tablename__ = "users"

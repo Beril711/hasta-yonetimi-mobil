@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy import String, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
-from app.core.base_model import BaseModel
+from app.base.base_model import BaseModel
 import uuid
 
 class Appointment(BaseModel):

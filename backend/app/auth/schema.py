@@ -1,0 +1,24 @@
+from pydantic import BaseModel, EmailStr
+from uuid import UUID
+
+class RegisterDTO(BaseModel):
+    full_name: str
+    email: EmailStr
+    password: str
+
+class LoginDTO(BaseModel):
+    email: EmailStr
+    password: str
+
+class TokenDTO(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+class UserResponseDTO(BaseModel):
+    id: UUID
+    full_name: str
+    email: str
+    is_active: bool
+
+    class Config:
+        from_attributes = True

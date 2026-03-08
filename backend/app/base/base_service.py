@@ -1,4 +1,4 @@
-from app.core.base_repo import BaseRepository
+from app.base.base_repo import BaseRepository
 
 class BaseService:
     def __init__(self, repository: BaseRepository):

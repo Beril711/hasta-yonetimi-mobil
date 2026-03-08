@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete
 from typing import TypeVar, Generic, Type
-from app.core.base_model import BaseModel
+from app.base.base_model import BaseModel
 
 ModelType = TypeVar("ModelType", bound=BaseModel)
 
