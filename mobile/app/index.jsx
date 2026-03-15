@@ -1,28 +1,21 @@
-import { View, Text, StyleSheet } from 'react-native';
+import { useEffect } from "react";
+import { useRouter } from "expo-router";
+import { getToken } from "../lib/storage";
 
-export default function HomeScreen() {
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Hasta Yönetimi</Text>
-      <Text style={styles.subtitle}>Mobil Uygulama çalışıyor 🚀</Text>
-    </View>
-  );
+export default function IndexScreen() {
+  const router = useRouter();
+
+  useEffect(() => {
+    const checkToken = async () => {
+      const token = await getToken();
+      if (token) {
+        router.replace("/dashboard");
+      } else {
+        router.replace("/login");
+      }
+    };
+    checkToken();
+  }, []);
+
+  return null;
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#fff',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-  },
-});
