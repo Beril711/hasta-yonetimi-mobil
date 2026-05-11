@@ -1,15 +1,13 @@
 import { useState } from "react";
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
+  View, Text, TextInput, TouchableOpacity,
+  StyleSheet, ActivityIndicator, KeyboardAvoidingView,
+  Platform, ScrollView,
 } from "react-native";
 import { useRouter } from "expo-router";
 import api from "../lib/api";
 import { setToken } from "../lib/storage";
+import { C, shadow } from "../lib/theme";
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -24,7 +22,7 @@ export default function LoginScreen() {
       const response = await api.post("/auth/login", form);
       await setToken(response.data.access_token);
       router.replace("/dashboard");
-    } catch (err) {
+    } catch {
       setError("E-posta veya şifre hatalı");
     } finally {
       setLoading(false);
@@ -32,110 +30,127 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.card}>
-        <Text style={styles.title}>Giriş Yap</Text>
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        <Text style={styles.label}>E-posta</Text>
-        <TextInput
-          style={styles.input}
-          value={form.email}
-          onChangeText={(val) => setForm({ ...form, email: val })}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          placeholder="ornek@email.com"
-        />
-        <Text style={styles.label}>Şifre</Text>
-        <TextInput
-          style={styles.input}
-          value={form.password}
-          onChangeText={(val) => setForm({ ...form, password: val })}
-          secureTextEntry
-          placeholder="••••••••"
-        />
-        <TouchableOpacity
-          style={styles.button}
-          onPress={handleSubmit}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>Giriş Yap</Text>
-          )}
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => router.push("/register")}>
-          <Text style={styles.link}>Hesabın yok mu? Kayıt ol</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+    <KeyboardAvoidingView
+      style={styles.flex}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
+      <ScrollView
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* Logo */}
+        <View style={styles.logoWrap}>
+          <Text style={styles.logo}>Med<Text style={styles.logoAccent}>Hub</Text></Text>
+          <Text style={styles.logoSub}>Akıllı Sağlık Platformu</Text>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.title}>Giriş Yap</Text>
+
+          {error ? <View style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View> : null}
+
+          <Text style={styles.label}>E-POSTA</Text>
+          <TextInput
+            style={styles.input}
+            value={form.email}
+            onChangeText={(v) => setForm({ ...form, email: v })}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            placeholder="ornek@email.com"
+            placeholderTextColor={C.textMuted}
+          />
+
+          <Text style={styles.label}>ŞİFRE</Text>
+          <TextInput
+            style={styles.input}
+            value={form.password}
+            onChangeText={(v) => setForm({ ...form, password: v })}
+            secureTextEntry
+            placeholder="••••••••"
+            placeholderTextColor={C.textMuted}
+          />
+
+          <TouchableOpacity
+            style={[styles.button, loading && styles.buttonDisabled]}
+            onPress={handleSubmit}
+            disabled={loading}
+          >
+            {loading
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={styles.buttonText}>Giriş Yap</Text>}
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={() => router.push("/register")}>
+            <Text style={styles.link}>Hesabın yok mu? <Text style={styles.linkBold}>Kayıt ol</Text></Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1, backgroundColor: C.bg },
   container: {
-    flex: 1,
-    backgroundColor: "#f3f4f6",
+    flexGrow: 1,
     justifyContent: "center",
     alignItems: "center",
-    padding: 16,
-  },
-  card: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
     padding: 24,
+  },
+  logoWrap: { alignItems: "center", marginBottom: 32 },
+  logo: { fontSize: 36, fontWeight: "800", color: C.primary },
+  logoAccent: { color: C.accent },
+  logoSub: { fontSize: 13, color: C.textMuted, marginTop: 4 },
+  card: {
+    backgroundColor: C.surface,
+    borderRadius: 16,
+    padding: 28,
     width: "100%",
-    maxWidth: 400,
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    maxWidth: 420,
+    ...shadow(2),
   },
   title: {
-    fontSize: 24,
-    fontWeight: "bold",
-    textAlign: "center",
+    fontSize: 22,
+    fontWeight: "700",
+    color: C.text,
     marginBottom: 20,
-    color: "#1f2937",
+    textAlign: "center",
   },
-  error: {
-    backgroundColor: "#fee2e2",
-    color: "#b91c1c",
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 12,
-    fontSize: 13,
+  errorBox: {
+    backgroundColor: C.dangerLight,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 16,
   },
+  errorText: { fontSize: 13, color: C.danger },
   label: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#374151",
-    marginBottom: 4,
+    fontSize: 10,
+    fontWeight: "700",
+    color: C.textMuted,
+    letterSpacing: 0.8,
+    marginBottom: 8,
+    marginTop: 4,
   },
   input: {
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 14,
+    borderWidth: 1.5,
+    borderColor: C.border,
+    borderRadius: 10,
+    padding: 13,
+    marginBottom: 16,
     fontSize: 14,
-    color: "#111827",
+    color: C.text,
+    backgroundColor: C.bg,
   },
   button: {
-    backgroundColor: "#2563eb",
-    padding: 12,
-    borderRadius: 8,
+    backgroundColor: C.primary,
+    padding: 14,
+    borderRadius: 10,
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: 16,
+    marginTop: 4,
   },
-  buttonText: {
-    color: "#fff",
-    fontWeight: "600",
-    fontSize: 15,
-  },
-  link: {
-    textAlign: "center",
-    color: "#2563eb",
-    fontSize: 13,
-  },
+  buttonDisabled: { opacity: 0.5 },
+  buttonText: { color: "#fff", fontWeight: "700", fontSize: 15 },
+  link: { textAlign: "center", color: C.textSec, fontSize: 13 },
+  linkBold: { color: C.primary, fontWeight: "600" },
 });

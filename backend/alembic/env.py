@@ -6,7 +6,7 @@ from logging.config import fileConfig
 from sqlalchemy.ext.asyncio import async_engine_from_config
 from sqlalchemy import pool
 from alembic import context
-from app.core.base_model import Base
+from app.base.base_model import Base
 from app.database import settings
 from app.auth.model import User
 from app.appointment.model import Appointment
