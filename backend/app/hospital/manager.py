@@ -1,19 +1,36 @@
 import httpx
+import math
 
 class HospitalManager:
-    BASE_URL = "https://overpass-api.de/api/interpreter"
+    BASE_URL = "https://nominatim.openstreetmap.org/search"
+
+    def _haversine(self, lat1, lon1, lat2, lon2):
+        R = 6371000
+        to_rad = math.radians
+        d_lat = to_rad(lat2 - lat1)
+        d_lon = to_rad(lon2 - lon1)
+        a = math.sin(d_lat / 2) ** 2 + math.cos(to_rad(lat1)) * math.cos(to_rad(lat2)) * math.sin(d_lon / 2) ** 2
+        return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
     async def search_nearby(self, latitude: float, longitude: float, department: str = None, radius: int = 5000) -> list:
-        query = f"""
-[out:json];
-node["amenity"="hospital"](around:{radius},{latitude},{longitude});
-out body;
-"""
+        keyword = "hastane"
+
         try:
             async with httpx.AsyncClient() as client:
-                response = await client.post(
+                response = await client.get(
                     self.BASE_URL,
-                    data={"data": query},
+                    params={
+                        "q": f"{keyword}",
+                        "format": "json",
+                        "limit": 30,
+                        "viewbox": f"{longitude - 0.1},{latitude + 0.1},{longitude + 0.1},{latitude - 0.1}",
+                        "bounded": 1,
+                        "addressdetails": 1,
+                        "accept-language": "tr",
+                    },
+                    headers={
+                        "User-Agent": "MedHub/1.0 (hasta-yonetimi-projesi)"
+                    },
                     timeout=15.0
                 )
                 if not response.content:
@@ -23,24 +40,27 @@ out body;
             return []
 
         hospitals = []
-        for element in data.get("elements", []):
-            tags = element.get("tags", {})
-            name = tags.get("name", "İsimsiz Hastane")
+        for place in data:
+            name = place.get("display_name", "").split(",")[0]
+            lat = float(place.get("lat", 0))
+            lon = float(place.get("lon", 0))
+            distance = self._haversine(latitude, longitude, lat, lon)
 
-            if department:
-                name_lower = name.lower()
-                dept_lower = department.lower()
-                if dept_lower not in name_lower and "hastane" not in name_lower:
-                    continue
+            if distance > radius:
+                continue
+
+            address_parts = place.get("display_name", "").split(",")
+            address = ", ".join(address_parts[1:4]).strip() if len(address_parts) > 1 else "Adres bilgisi yok"
 
             hospitals.append({
-                "place_id": str(element.get("id", "")),
+                "place_id": str(place.get("place_id", "")),
                 "name": name,
-                "address": tags.get("addr:full", tags.get("addr:street", "Adres bilgisi yok")),
-                "latitude": element.get("lat", 0),
-                "longitude": element.get("lon", 0),
+                "address": address,
+                "latitude": lat,
+                "longitude": lon,
                 "rating": None,
-                "distance": None
+                "distance": f"{int(distance)} m" if distance < 1000 else f"{distance/1000:.1f} km"
             })
 
+        hospitals.sort(key=lambda h: float(h["distance"].replace(" km", "").replace(" m", "")))
         return hospitals[:10]
