@@ -4,395 +4,234 @@ import {
   StyleSheet, ActivityIndicator, Alert, TextInput,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import api from '../../lib/api';
-import { C, shadow } from '../../lib/theme';
-
-const DEPARTMENTS = [
-  'Kardiyoloji', 'Nöroloji', 'Dahiliye', 'Ortopedi',
-  'Göz Hastalıkları', 'Kulak Burun Boğaz', 'Dermatoloji',
-  'Üroloji', 'Kadın Hastalıkları', 'Psikiyatri',
-  'Göğüs Hastalıkları', 'Endokrinoloji', 'Aile Hekimliği',
-];
+import TimeSlotPicker from '../../components/appointment/TimeSlotPicker';
+import AppointmentSummary from '../../components/appointment/AppointmentSummary';
 
 const STEPS = ['Bilgiler', 'Tarih & Saat', 'Onay'];
-
-function StepBar({ step }) {
-  return (
-    <View style={styles.stepBar}>
-      {STEPS.map((label, i) => {
-        const num = i + 1;
-        const done = step > num;
-        const active = step === num;
-        return (
-          <View key={label} style={styles.stepItem}>
-            <View style={[styles.stepCircle, done && styles.stepDone, active && styles.stepActive]}>
-              <Text style={[styles.stepNum, (done || active) && { color: '#fff' }]}>
-                {done ? '✓' : num}
-              </Text>
-            </View>
-            <Text style={[styles.stepLabel, active && { color: C.primary }]}>{label}</Text>
-            {i < STEPS.length - 1 && (
-              <View style={[styles.stepLine, done && styles.stepLineDone]} />
-            )}
-          </View>
-        );
-      })}
-    </View>
-  );
-}
 
 export default function NewAppointmentScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-
   const [step, setStep] = useState(1);
-  const [hospitalName, setHospitalName] = useState(params.hospital_name || '');
-  const [department, setDepartment] = useState(params.department || '');
-  const [doctorName, setDoctorName] = useState('');
+  const [loading, setLoading] = useState(false);
   const [slots, setSlots] = useState([]);
-  const [selectedSlot, setSelectedSlot] = useState(null);
-  const [loadingSlots, setLoadingSlots] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [notes, setNotes] = useState('');
+  const [selectedDate, setSelectedDate] = useState('');
+  const [data, setData] = useState({
+    hospital_name: params.hospital_name || '',
+    department: params.department || '',
+    doctor_name: '',
+    appointment_date: '',
+  });
+
+  const updateField = (field, value) => {
+    setData((prev) => ({ ...prev, [field]: value }));
+  };
 
   useEffect(() => {
-    if (step === 2 && department) {
-      setLoadingSlots(true);
-      api.get('/appointments/available-slots', { params: { department } })
+    if (selectedDate) {
+      setLoading(true);
+      api.get(`/appointments/available-slots?date=${selectedDate}`)
         .then((r) => setSlots(r.data || []))
-        .catch(() => setSlots(generateFallbackSlots()))
-        .finally(() => setLoadingSlots(false));
+        .catch(() => setSlots([]))
+        .finally(() => setLoading(false));
     }
-  }, [step, department]);
-
-  const generateFallbackSlots = () => {
-    const result = [];
-    const today = new Date();
-    for (let d = 1; d <= 5; d++) {
-      const date = new Date(today);
-      date.setDate(today.getDate() + d);
-      const dayStr = date.toLocaleDateString('tr-TR', { weekday: 'short', day: 'numeric', month: 'short' });
-      const dateStr = date.toISOString().split('T')[0];
-      ['09:00', '10:00', '11:00', '14:00', '15:00', '16:00'].forEach((t) => {
-        result.push({ date: dateStr, time: t, label: `${dayStr} – ${t}`, doctor: 'Dr. Genel Pratisyen' });
-      });
-    }
-    return result;
-  };
-
-  const canGoNext = () => {
-    if (step === 1) return hospitalName.trim().length > 0 && department.length > 0;
-    if (step === 2) return selectedSlot !== null;
-    return true;
-  };
-
-  const handleNext = () => {
-    if (step < 3) setStep(step + 1);
-  };
+  }, [selectedDate]);
 
   const handleSubmit = async () => {
-    if (!selectedSlot) return;
-    setSubmitting(true);
+    setLoading(true);
     try {
-      await api.post('/appointments/', {
-        hospital_name: hospitalName,
-        department,
-        doctor_name: selectedSlot.doctor || doctorName,
-        date: selectedSlot.date,
-        time: selectedSlot.time,
-        notes,
-      });
-      Alert.alert('Randevu Alındı!', 'Randevunuz başarıyla oluşturuldu.', [
+      await api.post('/appointments', data);
+      Alert.alert('Başarılı!', 'Randevunuz oluşturuldu.', [
         { text: 'Tamam', onPress: () => router.replace('/appointments') },
       ]);
     } catch (err) {
-      Alert.alert('Hata', err.response?.data?.detail || 'Randevu oluşturulamadı.');
+      Alert.alert('Hata', err.response?.data?.detail || 'Randevu oluşturulamadı');
     } finally {
-      setSubmitting(false);
+      setLoading(false);
     }
   };
 
+  const getDateOptions = () => {
+    const dates = [];
+    const today = new Date();
+    for (let i = 1; i <= 7; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() + i);
+      dates.push({
+        value: d.toISOString().split('T')[0],
+        label: d.toLocaleDateString('tr-TR', { weekday: 'short', day: 'numeric', month: 'short' }),
+      });
+    }
+    return dates;
+  };
+
   return (
-    <SafeAreaView style={styles.safe}>
+    <ScrollView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => (step > 1 ? setStep(step - 1) : router.back())}
-          style={styles.backBtn}
-        >
-          <Text style={styles.backText}>← {step > 1 ? 'Geri' : 'Vazgeç'}</Text>
+        <TouchableOpacity onPress={() => (step > 1 ? setStep(step - 1) : router.back())}>
+          <Text style={styles.backButton}>← {step > 1 ? 'Önceki Adım' : 'Geri'}</Text>
         </TouchableOpacity>
         <Text style={styles.title}>Randevu Al</Text>
       </View>
 
-      <StepBar step={step} />
+      <View style={styles.stepBar}>
+        {STEPS.map((s, i) => {
+          const num = i + 1;
+          const active = step === num;
+          const done = step > num;
+          return (
+            <View key={s} style={styles.stepItem}>
+              <View style={[styles.stepCircle, active && styles.stepActive, done && styles.stepDone]}>
+                <Text style={[styles.stepNum, (active || done) && { color: '#FFF' }]}>
+                  {done ? '✓' : num}
+                </Text>
+              </View>
+              <Text style={[styles.stepLabel, active && { color: '#1F3555' }]}>{s}</Text>
+            </View>
+          );
+        })}
+      </View>
 
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* Step 1: Bilgiler */}
+      <View style={styles.content}>
         {step === 1 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Hastane & Bölüm</Text>
-
+          <View style={styles.card}>
             <Text style={styles.label}>HASTANE ADI</Text>
             <TextInput
               style={styles.input}
-              value={hospitalName}
-              onChangeText={setHospitalName}
-              placeholder="Hastane adı"
-              placeholderTextColor={C.textMuted}
+              value={data.hospital_name}
+              onChangeText={(v) => updateField('hospital_name', v)}
+              placeholder="Örn: Acıbadem Taksim"
+              placeholderTextColor="#9CA3AF"
             />
-
             <Text style={styles.label}>BÖLÜM</Text>
-            <View style={styles.deptGrid}>
-              {DEPARTMENTS.map((d) => (
+            <TextInput
+              style={styles.input}
+              value={data.department}
+              onChangeText={(v) => updateField('department', v)}
+              placeholder="Örn: Dahiliye"
+              placeholderTextColor="#9CA3AF"
+            />
+            <Text style={styles.label}>DOKTOR ADI</Text>
+            <TextInput
+              style={styles.input}
+              value={data.doctor_name}
+              onChangeText={(v) => updateField('doctor_name', v)}
+              placeholder="Örn: Dr. Ahmet Yılmaz"
+              placeholderTextColor="#9CA3AF"
+            />
+            <TouchableOpacity
+              style={[styles.button, (!data.hospital_name || !data.department || !data.doctor_name) && styles.buttonDisabled]}
+              onPress={() => setStep(2)}
+              disabled={!data.hospital_name || !data.department || !data.doctor_name}
+            >
+              <Text style={styles.buttonText}>Devam Et →</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {step === 2 && (
+          <View style={styles.card}>
+            <Text style={styles.label}>TARİH SEÇİN</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
+              {getDateOptions().map((d) => (
                 <TouchableOpacity
-                  key={d}
-                  style={[styles.deptChip, department === d && styles.deptChipActive]}
-                  onPress={() => setDepartment(d)}
+                  key={d.value}
+                  style={[styles.dateChip, selectedDate === d.value && styles.dateChipSelected]}
+                  onPress={() => setSelectedDate(d.value)}
                 >
-                  <Text style={[styles.deptChipText, department === d && styles.deptChipTextActive]}>
-                    {d}
+                  <Text style={[styles.dateChipText, selectedDate === d.value && { color: '#FFF' }]}>
+                    {d.label}
                   </Text>
                 </TouchableOpacity>
               ))}
-            </View>
-          </View>
-        )}
+            </ScrollView>
 
-        {/* Step 2: Tarih & Saat */}
-        {step === 2 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Uygun Slot Seçin</Text>
-            {loadingSlots ? (
-              <View style={styles.center}>
-                <ActivityIndicator color={C.primary} />
-                <Text style={styles.loadingText}>Slotlar yükleniyor...</Text>
-              </View>
+            <Text style={styles.label}>MÜSAİT SAATLER</Text>
+            {loading ? (
+              <ActivityIndicator size="small" color="#1F3555" />
             ) : (
-              <View style={styles.slotGrid}>
-                {slots.map((slot, i) => {
-                  const key = `${slot.date}-${slot.time}`;
-                  const active = selectedSlot && selectedSlot.date === slot.date && selectedSlot.time === slot.time;
-                  return (
-                    <TouchableOpacity
-                      key={key}
-                      style={[styles.slotChip, active && styles.slotChipActive]}
-                      onPress={() => setSelectedSlot(slot)}
-                    >
-                      <Text style={[styles.slotDate, active && { color: '#fff' }]}>
-                        {new Date(slot.date).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}
-                      </Text>
-                      <Text style={[styles.slotTime, active && { color: 'rgba(255,255,255,0.9)' }]}>
-                        {slot.time}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            )}
-          </View>
-        )}
-
-        {/* Step 3: Onay */}
-        {step === 3 && selectedSlot && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Randevu Özeti</Text>
-            <View style={styles.summaryCard}>
-              <SummaryRow label="Hastane" value={hospitalName} />
-              <SummaryRow label="Bölüm" value={department} />
-              <SummaryRow
-                label="Tarih"
-                value={new Date(selectedSlot.date).toLocaleDateString('tr-TR', {
-                  weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-                })}
+              <TimeSlotPicker
+                slots={slots}
+                selectedSlot={data.appointment_date}
+                onSelect={(slot) => updateField('appointment_date', slot)}
               />
-              <SummaryRow label="Saat" value={selectedSlot.time} />
-              {selectedSlot.doctor && <SummaryRow label="Doktor" value={selectedSlot.doctor} />}
-            </View>
+            )}
 
-            <Text style={styles.label}>NOTLAR (opsiyonel)</Text>
-            <TextInput
-              style={[styles.input, styles.textarea]}
-              value={notes}
-              onChangeText={setNotes}
-              placeholder="Ek bilgi veya notlarınız..."
-              placeholderTextColor={C.textMuted}
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-            />
+            <TouchableOpacity
+              style={[styles.button, { marginTop: 20 }, !data.appointment_date && styles.buttonDisabled]}
+              onPress={() => setStep(3)}
+              disabled={!data.appointment_date}
+            >
+              <Text style={styles.buttonText}>Devam Et →</Text>
+            </TouchableOpacity>
           </View>
         )}
 
-        <View style={{ height: 20 }} />
-      </ScrollView>
-
-      <View style={styles.footer}>
-        {step < 3 ? (
-          <TouchableOpacity
-            style={[styles.nextBtn, !canGoNext() && styles.btnDisabled]}
-            onPress={handleNext}
-            disabled={!canGoNext()}
-          >
-            <Text style={styles.nextBtnText}>Devam Et →</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            style={[styles.nextBtn, submitting && styles.btnDisabled]}
-            onPress={handleSubmit}
-            disabled={submitting}
-          >
-            {submitting
-              ? <ActivityIndicator color="#fff" />
-              : <Text style={styles.nextBtnText}>Randevuyu Onayla ✓</Text>}
-          </TouchableOpacity>
+        {step === 3 && (
+          <View>
+            <AppointmentSummary data={data} />
+            <TouchableOpacity
+              style={[styles.button, { marginTop: 16 }, loading && styles.buttonDisabled]}
+              onPress={handleSubmit}
+              disabled={loading}
+            >
+              <Text style={styles.buttonText}>
+                {loading ? 'Oluşturuluyor...' : 'Randevuyu Onayla'}
+              </Text>
+            </TouchableOpacity>
+          </View>
         )}
       </View>
-    </SafeAreaView>
-  );
-}
-
-function SummaryRow({ label, value }) {
-  return (
-    <View style={styles.summaryRow}>
-      <Text style={styles.summaryLabel}>{label}</Text>
-      <Text style={styles.summaryValue}>{value}</Text>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: C.bg },
+  container: { flex: 1, backgroundColor: '#F4F3F4' },
   header: {
-    backgroundColor: C.surface,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: C.border,
+    backgroundColor: '#FFF', padding: 16, paddingTop: 50,
+    borderBottomWidth: 1, borderBottomColor: '#E5E7EB',
   },
-  backBtn: { marginBottom: 8 },
-  backText: { fontSize: 14, color: C.primary, fontWeight: '500' },
-  title: { fontSize: 24, fontWeight: '700', color: C.text },
+  backButton: { fontSize: 14, color: '#1F3555', marginBottom: 8 },
+  title: { fontSize: 24, fontWeight: '700', color: '#1F3555' },
   stepBar: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'flex-start',
-    backgroundColor: C.surface,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderBottomWidth: 1,
-    borderBottomColor: C.border,
-    gap: 0,
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
+    gap: 16, paddingVertical: 20, backgroundColor: '#FFF',
+    borderBottomWidth: 1, borderBottomColor: '#E5E7EB',
   },
-  stepItem: { alignItems: 'center', flex: 1, position: 'relative' },
+  stepItem: { alignItems: 'center', gap: 4 },
   stepCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: C.border,
-    backgroundColor: C.bg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: '#E5E7EB', alignItems: 'center', justifyContent: 'center',
   },
-  stepActive: { borderColor: C.primary, backgroundColor: C.primary },
-  stepDone: { borderColor: C.primary, backgroundColor: C.primary },
-  stepNum: { fontSize: 12, fontWeight: '700', color: C.textMuted },
-  stepLabel: { fontSize: 10, color: C.textMuted, fontWeight: '600', textAlign: 'center' },
-  stepLine: {
-    position: 'absolute',
-    top: 15,
-    left: '60%',
-    right: '-60%',
-    height: 2,
-    backgroundColor: C.border,
-    zIndex: -1,
+  stepActive: { backgroundColor: '#1F3555' },
+  stepDone: { backgroundColor: '#0D9488' },
+  stepNum: { fontSize: 14, fontWeight: '600', color: '#515561' },
+  stepLabel: { fontSize: 11, color: '#9CA3AF', fontWeight: '500' },
+  content: { padding: 16 },
+  card: {
+    backgroundColor: '#FFF', borderRadius: 12, padding: 20,
+    borderWidth: 1, borderColor: '#E5E7EB',
   },
-  stepLineDone: { backgroundColor: C.primary },
-  scroll: { flex: 1 },
-  section: {
-    backgroundColor: C.surface,
-    margin: 16,
-    borderRadius: 14,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: C.border,
-    ...shadow(1),
-  },
-  sectionTitle: { fontSize: 17, fontWeight: '700', color: C.text, marginBottom: 18 },
   label: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: C.textMuted,
-    letterSpacing: 0.8,
-    marginBottom: 8,
-    marginTop: 4,
+    fontSize: 11, fontWeight: '600', color: '#515561',
+    letterSpacing: 0.5, marginBottom: 8, marginTop: 4,
   },
   input: {
-    borderWidth: 1.5,
-    borderColor: C.border,
-    borderRadius: 10,
-    padding: 13,
-    marginBottom: 16,
-    fontSize: 14,
-    color: C.text,
-    backgroundColor: C.bg,
+    borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 8,
+    padding: 12, fontSize: 14, color: '#242740', backgroundColor: '#FFF',
+    marginBottom: 12,
   },
-  textarea: { minHeight: 80, textAlignVertical: 'top' },
-  deptGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  deptChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: C.border,
-    backgroundColor: C.bg,
+  button: {
+    backgroundColor: '#1F3555', padding: 14, borderRadius: 8, alignItems: 'center',
   },
-  deptChipActive: { backgroundColor: C.primary, borderColor: C.primary },
-  deptChipText: { fontSize: 12, color: C.textSec, fontWeight: '500' },
-  deptChipTextActive: { color: '#fff' },
-  center: { alignItems: 'center', paddingVertical: 32, gap: 10 },
-  loadingText: { fontSize: 13, color: C.textMuted },
-  slotGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  slotChip: {
-    width: '30%',
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: C.border,
-    backgroundColor: C.bg,
-    alignItems: 'center',
+  buttonDisabled: { opacity: 0.5 },
+  buttonText: { color: '#FFF', fontSize: 15, fontWeight: '600' },
+  dateChip: {
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+    borderWidth: 1, borderColor: '#E5E7EB', backgroundColor: '#FFF', marginRight: 8,
   },
-  slotChipActive: { backgroundColor: C.primary, borderColor: C.primary },
-  slotDate: { fontSize: 11, color: C.text, fontWeight: '600', marginBottom: 2 },
-  slotTime: { fontSize: 13, color: C.primary, fontWeight: '700' },
-  summaryCard: {
-    backgroundColor: C.bg,
-    borderRadius: 10,
-    padding: 14,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: C.border,
-    gap: 10,
-  },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  summaryLabel: { fontSize: 13, color: C.textMuted },
-  summaryValue: { fontSize: 13, color: C.text, fontWeight: '500', flexShrink: 1, textAlign: 'right', maxWidth: '65%' },
-  footer: {
-    backgroundColor: C.surface,
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: C.border,
-  },
-  nextBtn: {
-    backgroundColor: C.primary,
-    padding: 15,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  btnDisabled: { opacity: 0.45 },
-  nextBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  dateChipSelected: { backgroundColor: '#1F3555', borderColor: '#1F3555' },
+  dateChipText: { fontSize: 13, color: '#242740', fontWeight: '500' },
 });

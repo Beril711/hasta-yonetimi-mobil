@@ -4,21 +4,9 @@ import {
   StyleSheet, ActivityIndicator, TextInput,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import api from '../lib/api';
-import { C, shadow } from '../lib/theme';
-
-const FALLBACK = [
-  { id: 1, name: 'Acıbadem Kadıköy Hastanesi', address: 'Tekin Sok. No:8, Kadıköy', distance: 1200, rating: 4.8, departments: ['Kardiyoloji', 'Nöroloji', 'Ortopedi', 'Dahiliye'] },
-  { id: 2, name: 'Marmara Üniversitesi Eğitim Araştırma Hastanesi', address: 'Fevzi Çakmak Mah., Pendik', distance: 3400, rating: 4.5, departments: ['Dahiliye', 'Göğüs Hastalıkları', 'Psikiyatri', 'Üroloji'] },
-  { id: 3, name: 'Göztepe Prof. Dr. Süleyman Yalçın Şehir Hastanesi', address: 'Dr. Erkin Cad., Göztepe', distance: 2100, rating: 4.6, departments: ['Kardiyoloji', 'Göz Hastalıkları', 'KBB', 'Ortopedi'] },
-  { id: 4, name: 'Kartal Eğitim ve Araştırma Hastanesi', address: 'E-5 Karayolu, Kartal', distance: 4800, rating: 4.3, departments: ['Dahiliye', 'Dermatoloji', 'Endokrinoloji', 'Kadın Hastalıkları'] },
-  { id: 5, name: 'Florence Nightingale Hastanesi', address: 'Abide-i Hürriyet Cad., Şişli', distance: 5600, rating: 4.7, departments: ['Nöroloji', 'Kardiyoloji', 'Dahiliye', 'Psikiyatri'] },
-];
-
-function distanceLabel(m) {
-  return m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${m} m`;
-}
+import { getFallbackHospitals } from '../lib/hospitalFallback';
+import HospitalCard from '../components/hospital/HospitalCard';
 
 export default function HospitalsScreen() {
   const router = useRouter();
@@ -28,12 +16,23 @@ export default function HospitalsScreen() {
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    api.get('/hospitals/search', {
-      params: { latitude: 41.0430, longitude: 29.0043, radius: 5000 },
-    })
-      .then((r) => setHospitals(r.data?.length ? r.data : FALLBACK))
-      .catch(() => setHospitals(FALLBACK))
-      .finally(() => setLoading(false));
+    const fetchHospitals = async () => {
+      try {
+        const res = await api.get('/hospitals/search', {
+          params: { latitude: 41.0430, longitude: 29.0043, radius: 5000 },
+        });
+        if (res.data && res.data.length > 0) {
+          setHospitals(res.data);
+        } else {
+          setHospitals(getFallbackHospitals());
+        }
+      } catch (err) {
+        setHospitals(getFallbackHospitals());
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchHospitals();
   }, []);
 
   const filtered = hospitals.filter((h) =>
@@ -41,22 +40,22 @@ export default function HospitalsScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={styles.backText}>← Geri</Text>
+        <TouchableOpacity onPress={() => router.back()}>
+          <Text style={styles.backButton}>← Geri</Text>
         </TouchableOpacity>
         <Text style={styles.title}>Yakın Hastaneler</Text>
-        <Text style={styles.subtitle}>
-          {department ? `"${department}" için hastane seçin` : 'Konumunuza yakın hastaneler'}
-        </Text>
+        {department && (
+          <Text style={styles.subtitle}>Bölüm: {department}</Text>
+        )}
       </View>
 
-      <View style={styles.searchWrap}>
+      <View style={styles.searchBox}>
         <TextInput
           style={styles.searchInput}
           placeholder="Hastane ara..."
-          placeholderTextColor={C.textMuted}
+          placeholderTextColor="#9CA3AF"
           value={search}
           onChangeText={setSearch}
         />
@@ -64,141 +63,52 @@ export default function HospitalsScreen() {
 
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={C.primary} />
-          <Text style={styles.loadingText}>Hastaneler yükleniyor...</Text>
+          <ActivityIndicator size="large" color="#1F3555" />
+          <Text style={styles.loadingText}>Hastaneler aranıyor...</Text>
+        </View>
+      ) : filtered.length === 0 ? (
+        <View style={styles.center}>
+          <Text style={styles.emptyIcon}>🏥</Text>
+          <Text style={styles.emptyText}>Hastane bulunamadı</Text>
         </View>
       ) : (
-        <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+        <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
           {filtered.map((h) => (
-            <View key={h.id} style={styles.card}>
-              <View style={styles.cardTop}>
-                <View style={styles.iconBox}>
-                  <Text style={styles.iconText}>🏥</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.name}>{h.name}</Text>
-                  <Text style={styles.address}>{h.address}</Text>
-                </View>
-                <View style={styles.distBadge}>
-                  <Text style={styles.distText}>{distanceLabel(h.distance)}</Text>
-                </View>
-              </View>
-
-              <View style={styles.metaRow}>
-                <Text style={styles.rating}>⭐ {h.rating}</Text>
-                <Text style={styles.deptCount}>{(h.departments || []).length} bölüm</Text>
-              </View>
-
-              {(h.departments || []).length > 0 && (
-                <View style={styles.deptWrap}>
-                  {(h.departments || []).slice(0, 4).map((d) => (
-                    <View key={d} style={styles.deptTag}>
-                      <Text style={styles.deptTagText}>{d}</Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-
-              <TouchableOpacity
-                style={styles.bookBtn}
-                onPress={() =>
-                  router.push(
-                    `/appointments/new?hospital_name=${encodeURIComponent(h.name)}${department ? `&department=${encodeURIComponent(department)}` : ''}`
-                  )
-                }
-              >
-                <Text style={styles.bookBtnText}>Randevu Al →</Text>
-              </TouchableOpacity>
-            </View>
+            <HospitalCard
+              key={h.place_id || h.id}
+              hospital={h}
+              onPress={() =>
+                router.push({
+                  pathname: '/appointments/new',
+                  params: { hospital_name: h.name, department: department || '' },
+                })
+              }
+            />
           ))}
-          <View style={{ height: 32 }} />
+          <View style={{ height: 30 }} />
         </ScrollView>
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: C.bg },
+  container: { flex: 1, backgroundColor: '#F4F3F4' },
   header: {
-    backgroundColor: C.surface,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: C.border,
+    backgroundColor: '#FFF', padding: 16, paddingTop: 50,
+    borderBottomWidth: 1, borderBottomColor: '#E5E7EB',
   },
-  backBtn: { marginBottom: 10 },
-  backText: { fontSize: 14, color: C.primary, fontWeight: '500' },
-  title: { fontSize: 26, fontWeight: '700', color: C.text, marginBottom: 4 },
-  subtitle: { fontSize: 13, color: C.textMuted },
-  searchWrap: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: C.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: C.border,
-  },
+  backButton: { fontSize: 14, color: '#1F3555', marginBottom: 8 },
+  title: { fontSize: 24, fontWeight: '700', color: '#1F3555' },
+  subtitle: { fontSize: 13, color: '#515561', marginTop: 4 },
+  searchBox: { padding: 16 },
   searchInput: {
-    backgroundColor: C.bg,
-    borderWidth: 1.5,
-    borderColor: C.border,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: C.text,
+    backgroundColor: '#FFF', borderRadius: 10, padding: 12,
+    borderWidth: 1, borderColor: '#E5E7EB', fontSize: 14, color: '#242740',
   },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
-  loadingText: { fontSize: 14, color: C.textMuted },
-  scroll: { flex: 1 },
-  card: {
-    backgroundColor: C.surface,
-    marginHorizontal: 16,
-    marginTop: 12,
-    borderRadius: 14,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: C.border,
-    ...shadow(1),
-  },
-  cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 10 },
-  iconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: '#EFF6FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconText: { fontSize: 22 },
-  name: { fontSize: 14, fontWeight: '700', color: C.text, marginBottom: 3, flexShrink: 1 },
-  address: { fontSize: 12, color: C.textMuted, lineHeight: 17 },
-  distBadge: {
-    backgroundColor: C.primaryLight,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  distText: { fontSize: 11, color: C.primary, fontWeight: '600' },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
-  rating: { fontSize: 13, color: C.text, fontWeight: '500' },
-  deptCount: { fontSize: 12, color: C.textMuted },
-  deptWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 14 },
-  deptTag: {
-    backgroundColor: C.bg,
-    borderWidth: 1,
-    borderColor: C.border,
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  deptTagText: { fontSize: 11, color: C.textSec },
-  bookBtn: {
-    backgroundColor: C.primary,
-    padding: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  bookBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  loadingText: { fontSize: 13, color: '#515561', marginTop: 8 },
+  emptyIcon: { fontSize: 48 },
+  emptyText: { fontSize: 16, color: '#515561' },
+  list: { flex: 1, paddingHorizontal: 16 },
 });

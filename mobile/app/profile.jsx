@@ -4,20 +4,17 @@ import {
   StyleSheet, ActivityIndicator, TextInput, Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import api from '../lib/api';
 import { removeToken } from '../lib/storage';
-import { C, shadow } from '../lib/theme';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ full_name: '', email: '' });
-  const [passwordForm, setPasswordForm] = useState({ current_password: '', new_password: '', confirm: '' });
-  const [showPassword, setShowPassword] = useState(false);
+  const [message, setMessage] = useState('');
 
   useEffect(() => {
     api.get('/auth/me')
@@ -31,44 +28,20 @@ export default function ProfileScreen() {
 
   const handleSave = async () => {
     setSaving(true);
+    setMessage('');
     try {
-      const r = await api.put('/auth/profile', { full_name: form.full_name });
+      const r = await api.patch('/auth/me', { full_name: form.full_name });
       setUser(r.data);
       setEditing(false);
-      Alert.alert('Kaydedildi', 'Profiliniz güncellendi.');
+      setMessage('Profil güncellendi');
     } catch (err) {
-      Alert.alert('Hata', err.response?.data?.detail || 'Güncelleme başarısız.');
+      setMessage(err.response?.data?.detail || 'Güncelleme başarısız');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleChangePassword = async () => {
-    if (passwordForm.new_password !== passwordForm.confirm) {
-      Alert.alert('Hata', 'Yeni şifreler eşleşmiyor.');
-      return;
-    }
-    if (passwordForm.new_password.length < 6) {
-      Alert.alert('Hata', 'Şifre en az 6 karakter olmalıdır.');
-      return;
-    }
-    setSaving(true);
-    try {
-      await api.post('/auth/change-password', {
-        current_password: passwordForm.current_password,
-        new_password: passwordForm.new_password,
-      });
-      setPasswordForm({ current_password: '', new_password: '', confirm: '' });
-      setShowPassword(false);
-      Alert.alert('Başarılı', 'Şifreniz güncellendi.');
-    } catch (err) {
-      Alert.alert('Hata', err.response?.data?.detail || 'Şifre değiştirilemedi.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleLogout = async () => {
+  const handleLogout = () => {
     Alert.alert('Çıkış Yap', 'Hesabınızdan çıkmak istediğinizden emin misiniz?', [
       { text: 'Vazgeç', style: 'cancel' },
       {
@@ -85,7 +58,7 @@ export default function ProfileScreen() {
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color={C.primary} />
+        <ActivityIndicator size="large" color="#1F3555" />
       </View>
     );
   }
@@ -98,239 +71,143 @@ export default function ProfileScreen() {
     .toUpperCase();
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <ScrollView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={styles.backText}>← Geri</Text>
+        <TouchableOpacity onPress={() => router.back()}>
+          <Text style={styles.backButton}>← Geri</Text>
         </TouchableOpacity>
         <Text style={styles.title}>Profilim</Text>
-        <Text style={styles.subtitle}>Hesap bilgilerinizi yönetin</Text>
       </View>
 
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* Avatar */}
-        <View style={styles.avatarSection}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initials}</Text>
-          </View>
-          <Text style={styles.userName}>{user?.full_name}</Text>
-          <Text style={styles.userEmail}>{user?.email}</Text>
+      <View style={styles.avatarSection}>
+        <View style={styles.avatar}>
+          <Text style={styles.avatarText}>{initials}</Text>
         </View>
+        <Text style={styles.userName}>{user?.full_name}</Text>
+        <Text style={styles.userEmail}>{user?.email}</Text>
+      </View>
 
-        {/* Profil Bilgileri */}
-        <View style={styles.card}>
-          <View style={styles.cardHeaderRow}>
-            <Text style={styles.cardTitle}>Profil Bilgileri</Text>
-            {!editing && (
-              <TouchableOpacity onPress={() => setEditing(true)}>
-                <Text style={styles.editLink}>Düzenle</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          <Text style={styles.label}>AD SOYAD</Text>
-          <TextInput
-            style={[styles.input, !editing && styles.inputDisabled]}
-            value={form.full_name}
-            onChangeText={(v) => setForm({ ...form, full_name: v })}
-            editable={editing}
-            placeholderTextColor={C.textMuted}
-          />
-
-          <Text style={styles.label}>E-POSTA</Text>
-          <TextInput
-            style={[styles.input, styles.inputDisabled]}
-            value={form.email}
-            editable={false}
-            placeholderTextColor={C.textMuted}
-          />
-
-          {editing && (
-            <View style={styles.editActions}>
-              <TouchableOpacity
-                style={styles.cancelBtn}
-                onPress={() => {
-                  setEditing(false);
-                  setForm({ full_name: user.full_name, email: user.email });
-                }}
-              >
-                <Text style={styles.cancelBtnText}>Vazgeç</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.saveBtn, saving && { opacity: 0.5 }]}
-                onPress={handleSave}
-                disabled={saving}
-              >
-                {saving
-                  ? <ActivityIndicator color="#fff" size="small" />
-                  : <Text style={styles.saveBtnText}>Kaydet</Text>}
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-
-        {/* Şifre Değiştir */}
-        <View style={styles.card}>
-          <TouchableOpacity
-            style={styles.cardHeaderRow}
-            onPress={() => setShowPassword(!showPassword)}
-          >
-            <Text style={styles.cardTitle}>Şifre Değiştir</Text>
-            <Text style={styles.editLink}>{showPassword ? 'Kapat' : 'Aç'}</Text>
+      <View style={styles.card}>
+        <View style={styles.cardHeaderRow}>
+          <Text style={styles.cardTitle}>Kişisel Bilgiler</Text>
+          <TouchableOpacity onPress={() => setEditing(!editing)}>
+            <Text style={styles.editLink}>{editing ? 'İptal' : 'Düzenle'}</Text>
           </TouchableOpacity>
-
-          {showPassword && (
-            <>
-              <Text style={styles.label}>MEVCUT ŞİFRE</Text>
-              <TextInput
-                style={styles.input}
-                value={passwordForm.current_password}
-                onChangeText={(v) => setPasswordForm({ ...passwordForm, current_password: v })}
-                secureTextEntry
-                placeholder="••••••••"
-                placeholderTextColor={C.textMuted}
-              />
-              <Text style={styles.label}>YENİ ŞİFRE</Text>
-              <TextInput
-                style={styles.input}
-                value={passwordForm.new_password}
-                onChangeText={(v) => setPasswordForm({ ...passwordForm, new_password: v })}
-                secureTextEntry
-                placeholder="••••••••"
-                placeholderTextColor={C.textMuted}
-              />
-              <Text style={styles.label}>YENİ ŞİFRE (TEKRAR)</Text>
-              <TextInput
-                style={styles.input}
-                value={passwordForm.confirm}
-                onChangeText={(v) => setPasswordForm({ ...passwordForm, confirm: v })}
-                secureTextEntry
-                placeholder="••••••••"
-                placeholderTextColor={C.textMuted}
-              />
-              <TouchableOpacity
-                style={[styles.saveBtn, { marginTop: 4 }, saving && { opacity: 0.5 }]}
-                onPress={handleChangePassword}
-                disabled={saving}
-              >
-                {saving
-                  ? <ActivityIndicator color="#fff" size="small" />
-                  : <Text style={styles.saveBtnText}>Şifreyi Güncelle</Text>}
-              </TouchableOpacity>
-            </>
-          )}
         </View>
 
-        {/* Çıkış */}
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-          <Text style={styles.logoutText}>Hesaptan Çıkış Yap</Text>
-        </TouchableOpacity>
+        <Text style={styles.label}>AD SOYAD</Text>
+        <TextInput
+          style={[styles.input, !editing && styles.inputDisabled]}
+          value={form.full_name}
+          onChangeText={(v) => setForm({ ...form, full_name: v })}
+          editable={editing}
+        />
 
-        <View style={{ height: 40 }} />
-      </ScrollView>
-    </SafeAreaView>
+        <Text style={styles.label}>E-POSTA</Text>
+        <TextInput
+          style={[styles.input, styles.inputDisabled]}
+          value={form.email}
+          editable={false}
+        />
+
+        {message ? (
+          <Text style={[styles.message, message.includes('güncellendi') ? styles.messageSuccess : styles.messageError]}>
+            {message}
+          </Text>
+        ) : null}
+
+        {editing && (
+          <TouchableOpacity
+            style={[styles.saveBtn, saving && { opacity: 0.5 }]}
+            onPress={handleSave}
+            disabled={saving}
+          >
+            <Text style={styles.saveBtnText}>
+              {saving ? 'Kaydediliyor...' : 'Kaydet'}
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Hesap Bilgileri</Text>
+        <View style={styles.infoRow}>
+          <Text style={styles.infoLabel}>Hesap ID</Text>
+          <Text style={styles.infoValue}>{user?.id?.slice(0, 8)}...</Text>
+        </View>
+        <View style={styles.infoRow}>
+          <Text style={styles.infoLabel}>Durum</Text>
+          <Text style={[styles.infoValue, { color: '#0D9488' }]}>
+            {user?.is_active ? 'Aktif' : 'Pasif'}
+          </Text>
+        </View>
+      </View>
+
+      <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+        <Text style={styles.logoutText}>Hesaptan Çıkış Yap</Text>
+      </TouchableOpacity>
+
+      <View style={{ height: 40 }} />
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: C.bg },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: C.bg },
+  container: { flex: 1, backgroundColor: '#F4F3F4' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F4F3F4' },
   header: {
-    backgroundColor: C.surface,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: C.border,
+    backgroundColor: '#FFF', padding: 16, paddingTop: 50,
+    borderBottomWidth: 1, borderBottomColor: '#E5E7EB',
   },
-  backBtn: { marginBottom: 10 },
-  backText: { fontSize: 14, color: C.primary, fontWeight: '500' },
-  title: { fontSize: 26, fontWeight: '700', color: C.text, marginBottom: 4 },
-  subtitle: { fontSize: 13, color: C.textMuted },
-  scroll: { flex: 1 },
+  backButton: { fontSize: 14, color: '#1F3555', marginBottom: 8 },
+  title: { fontSize: 24, fontWeight: '700', color: '#1F3555' },
   avatarSection: {
-    alignItems: 'center',
-    paddingVertical: 28,
-    backgroundColor: C.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: C.border,
+    alignItems: 'center', paddingVertical: 24,
+    backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E5E7EB',
   },
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: C.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
+    width: 72, height: 72, borderRadius: 36, backgroundColor: '#1F3555',
+    alignItems: 'center', justifyContent: 'center', marginBottom: 12,
   },
-  avatarText: { color: '#fff', fontSize: 28, fontWeight: '700' },
-  userName: { fontSize: 20, fontWeight: '700', color: C.text, marginBottom: 4 },
-  userEmail: { fontSize: 13, color: C.textMuted },
+  avatarText: { color: '#FFF', fontSize: 26, fontWeight: '700' },
+  userName: { fontSize: 20, fontWeight: '700', color: '#1F3555', marginBottom: 4 },
+  userEmail: { fontSize: 13, color: '#515561' },
   card: {
-    backgroundColor: C.surface,
-    marginHorizontal: 16,
-    marginTop: 12,
-    borderRadius: 14,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: C.border,
-    ...shadow(1),
+    backgroundColor: '#FFF', marginHorizontal: 16, marginTop: 12,
+    borderRadius: 12, padding: 18, borderWidth: 1, borderColor: '#E5E7EB',
   },
   cardHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', marginBottom: 16,
   },
-  cardTitle: { fontSize: 15, fontWeight: '700', color: C.text },
-  editLink: { fontSize: 13, color: C.primary, fontWeight: '600' },
+  cardTitle: { fontSize: 15, fontWeight: '700', color: '#1F3555' },
+  editLink: { fontSize: 13, color: '#1F3555', fontWeight: '600' },
   label: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: C.textMuted,
-    letterSpacing: 0.8,
-    marginBottom: 8,
-    marginTop: 4,
+    fontSize: 11, fontWeight: '600', color: '#515561',
+    letterSpacing: 0.5, marginBottom: 8, marginTop: 4,
   },
   input: {
-    borderWidth: 1.5,
-    borderColor: C.border,
-    borderRadius: 10,
-    padding: 13,
-    marginBottom: 12,
-    fontSize: 14,
-    color: C.text,
-    backgroundColor: C.bg,
+    borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 8,
+    padding: 12, fontSize: 14, color: '#242740', backgroundColor: '#FFF', marginBottom: 12,
   },
-  inputDisabled: { color: C.textSec, backgroundColor: C.bg },
-  editActions: { flexDirection: 'row', gap: 10, marginTop: 4 },
-  cancelBtn: {
-    flex: 1,
-    borderWidth: 1.5,
-    borderColor: C.border,
-    borderRadius: 10,
-    padding: 12,
-    alignItems: 'center',
-  },
-  cancelBtnText: { fontSize: 14, color: C.textSec, fontWeight: '600' },
+  inputDisabled: { backgroundColor: '#F4F3F4', color: '#515561' },
+  message: { fontSize: 13, padding: 10, borderRadius: 8, marginBottom: 12 },
+  messageSuccess: { backgroundColor: '#F0FDF4', color: '#0D9488' },
+  messageError: { backgroundColor: '#FEF2F2', color: '#C33C3C' },
   saveBtn: {
-    flex: 1,
-    backgroundColor: C.primary,
-    borderRadius: 10,
-    padding: 12,
-    alignItems: 'center',
+    backgroundColor: '#1F3555', borderRadius: 8, padding: 14, alignItems: 'center',
   },
-  saveBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  saveBtnText: { color: '#FFF', fontSize: 14, fontWeight: '700' },
+  infoRow: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F4F3F4',
+  },
+  infoLabel: { fontSize: 13, color: '#515561' },
+  infoValue: { fontSize: 13, fontWeight: '600', color: '#1F3555' },
   logoutBtn: {
-    marginHorizontal: 16,
-    marginTop: 12,
-    backgroundColor: C.dangerLight,
-    borderRadius: 14,
-    padding: 15,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#FECACA',
+    marginHorizontal: 16, marginTop: 12, backgroundColor: '#FEF2F2',
+    borderRadius: 12, padding: 15, alignItems: 'center',
+    borderWidth: 1, borderColor: '#FECACA',
   },
-  logoutText: { color: C.danger, fontSize: 15, fontWeight: '700' },
+  logoutText: { color: '#C33C3C', fontSize: 15, fontWeight: '700' },
 });
